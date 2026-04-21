@@ -1,0 +1,1996 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deadlock Toolkit — OS Unit 4</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap');
+
+    :root {
+      --bg: #0a0c10;
+      --surface: #111318;
+      --surface2: #181c24;
+      --border: #252a35;
+      --accent-detect: #ff4757;
+      --accent-prevent: #2ed573;
+      --accent-recover: #ffa502;
+      --text: #e8eaf0;
+      --muted: #6b7280;
+      --glow-detect: rgba(255, 71, 87, 0.25);
+      --glow-prevent: rgba(46, 213, 115, 0.25);
+      --glow-recover: rgba(255, 165, 2, 0.25);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Space Mono', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* GRID BG */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      position: relative;
+      z-index: 10;
+      padding: 40px 60px 30px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(10, 12, 16, 0.9);
+      backdrop-filter: blur(10px);
+    }
+
+    .logo {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 1.5rem;
+      letter-spacing: -0.02em;
+    }
+
+    .logo span {
+      color: var(--accent-detect);
+    }
+
+    .subtitle {
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-prevent);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 var(--glow-prevent);
+      }
+
+      50% {
+        opacity: 0.6;
+        box-shadow: 0 0 0 6px transparent;
+      }
+    }
+
+    /* TABS */
+    .tabs {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .tab {
+      flex: 1;
+      padding: 20px;
+      text-align: center;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tab::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      transform: scaleX(0);
+      transition: transform 0.3s;
+    }
+
+    .tab[data-tab="detect"]::after {
+      background: var(--accent-detect);
+    }
+
+    .tab[data-tab="prevent"]::after {
+      background: var(--accent-prevent);
+    }
+
+    .tab[data-tab="recover"]::after {
+      background: var(--accent-recover);
+    }
+
+    .tab.active {
+      color: var(--text);
+    }
+
+    .tab.active::after {
+      transform: scaleX(1);
+    }
+
+    .tab[data-tab="detect"].active {
+      color: var(--accent-detect);
+    }
+
+    .tab[data-tab="prevent"].active {
+      color: var(--accent-prevent);
+    }
+
+    .tab[data-tab="recover"].active {
+      color: var(--accent-recover);
+    }
+
+    .tab-icon {
+      font-size: 1.2rem;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    /* PANELS */
+    .panel {
+      display: none;
+      animation: fadeIn 0.4s ease;
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .container {
+      position: relative;
+      z-index: 5;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 40px 60px;
+    }
+
+    .section-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 2rem;
+      margin-bottom: 8px;
+      letter-spacing: -0.03em;
+    }
+
+    .section-desc {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-bottom: 40px;
+      line-height: 1.6;
+    }
+
+    /* CARDS */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+
+    .card-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title .num {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    /* INPUTS */
+    .input-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    input[type="number"],
+    input[type="text"],
+    select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+      padding: 10px 12px;
+      width: 100%;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--accent-detect);
+    }
+
+    .btn {
+      padding: 12px 28px;
+      border: none;
+      border-radius: 4px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-detect {
+      background: var(--accent-detect);
+      color: #fff;
+    }
+
+    .btn-detect:hover {
+      box-shadow: 0 0 20px var(--glow-detect);
+      transform: translateY(-2px);
+    }
+
+    .btn-prevent {
+      background: var(--accent-prevent);
+      color: #000;
+    }
+
+    .btn-prevent:hover {
+      box-shadow: 0 0 20px var(--glow-prevent);
+      transform: translateY(-2px);
+    }
+
+    .btn-recover {
+      background: var(--accent-recover);
+      color: #000;
+    }
+
+    .btn-recover:hover {
+      box-shadow: 0 0 20px var(--glow-recover);
+      transform: translateY(-2px);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      margin-left: 10px;
+    }
+
+    .btn-outline:hover {
+      border-color: var(--text);
+      color: var(--text);
+    }
+
+    /* MATRIX TABLE */
+    .matrix-wrap {
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+
+    th {
+      background: var(--surface2);
+      padding: 10px 14px;
+      text-align: center;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    td {
+      padding: 10px 14px;
+      text-align: center;
+      border: 1px solid var(--border);
+      transition: background 0.3s;
+    }
+
+    td input {
+      width: 50px;
+      text-align: center;
+      padding: 6px;
+      border-radius: 3px;
+    }
+
+    .tr-highlight {
+      background: rgba(46, 213, 115, 0.07);
+    }
+
+    .tr-deadlock {
+      background: rgba(255, 71, 87, 0.07);
+    }
+
+    /* RESULT BOX */
+    .result-box {
+      padding: 20px 24px;
+      border-radius: 6px;
+      margin-top: 20px;
+      font-size: 0.85rem;
+      line-height: 1.8;
+      border-left: 4px solid;
+      display: none;
+    }
+
+    .result-box.show {
+      display: block;
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .result-safe {
+      border-color: var(--accent-prevent);
+      background: rgba(46, 213, 115, 0.06);
+    }
+
+    .result-unsafe {
+      border-color: var(--accent-detect);
+      background: rgba(255, 71, 87, 0.06);
+    }
+
+    .result-info {
+      border-color: var(--accent-recover);
+      background: rgba(255, 165, 2, 0.06);
+    }
+
+    .result-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      margin-bottom: 10px;
+    }
+
+    /* GRAPH CANVAS */
+    #detect-canvas,
+    #rag-canvas {
+      width: 100%;
+      border-radius: 6px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      display: block;
+    }
+
+    /* LOG */
+    .log {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      font-size: 0.75rem;
+      line-height: 2;
+      max-height: 220px;
+      overflow-y: auto;
+      margin-top: 16px;
+      color: var(--muted);
+    }
+
+    .log .log-safe {
+      color: var(--accent-prevent);
+    }
+
+    .log .log-warn {
+      color: var(--accent-recover);
+    }
+
+    .log .log-err {
+      color: var(--accent-detect);
+    }
+
+    .log .log-step {
+      color: var(--text);
+    }
+
+    /* GRID LAYOUTS */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .three-col {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 2rem;
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 6px;
+    }
+
+    /* CONDITION CHIPS */
+    .conditions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+
+    .condition {
+      padding: 8px 14px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      border: 1px solid var(--border);
+      transition: all 0.4s;
+      letter-spacing: 0.05em;
+    }
+
+    .condition.violated {
+      border-color: var(--accent-detect);
+      background: rgba(255, 71, 87, 0.15);
+      color: var(--accent-detect);
+      box-shadow: 0 0 10px var(--glow-detect);
+    }
+
+    .condition.ok {
+      border-color: var(--accent-prevent);
+      background: rgba(46, 213, 115, 0.1);
+      color: var(--accent-prevent);
+    }
+
+    /* STEPS */
+    .steps {
+      counter-reset: step;
+    }
+
+    .step-item {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+      opacity: 0;
+      transform: translateX(-10px);
+      transition: all 0.4s;
+    }
+
+    .step-item.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 0.8rem;
+      flex-shrink: 0;
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-title {
+      font-weight: 700;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+    }
+
+    .step-desc {
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* PROCESS CHAIN */
+    .sequence {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+
+    .seq-item {
+      padding: 10px 16px;
+      border-radius: 4px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.85rem;
+      opacity: 0;
+      transform: scale(0.8);
+      transition: all 0.3s;
+    }
+
+    .seq-arrow {
+      font-size: 1.2rem;
+      color: var(--muted);
+      padding: 0 4px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    /* PROCESS NODES in Recovery */
+    .process-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .process-node {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      text-align: center;
+      transition: all 0.4s;
+      cursor: pointer;
+    }
+
+    .process-node:hover {
+      border-color: var(--accent-recover);
+    }
+
+    .process-node.stuck {
+      border-color: var(--accent-detect);
+      background: rgba(255, 71, 87, 0.08);
+      animation: shake 0.5s ease;
+    }
+
+    .process-node.killed {
+      border-color: var(--muted);
+      opacity: 0.3;
+      filter: grayscale(1);
+    }
+
+    .process-node.running {
+      border-color: var(--accent-prevent);
+      background: rgba(46, 213, 115, 0.08);
+    }
+
+    @keyframes shake {
+
+      0%,
+      100% {
+        transform: translateX(0);
+      }
+
+      25% {
+        transform: translateX(-4px);
+      }
+
+      75% {
+        transform: translateX(4px);
+      }
+    }
+
+    .pnode-name {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .pnode-res {
+      font-size: 0.65rem;
+      color: var(--muted);
+      margin-top: 6px;
+      line-height: 1.6;
+    }
+
+    .pnode-badge {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* SCROLLBAR */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 900px) {
+      header {
+        padding: 20px;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .container {
+        padding: 20px;
+      }
+
+      .two-col {
+        grid-template-columns: 1fr;
+      }
+
+      .three-col {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    /* Chip */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border: 1px solid;
+    }
+
+    .chip-detect {
+      border-color: var(--accent-detect);
+      color: var(--accent-detect);
+    }
+
+    .chip-prevent {
+      border-color: var(--accent-prevent);
+      color: var(--accent-prevent);
+    }
+
+    .chip-recover {
+      border-color: var(--accent-recover);
+      color: var(--accent-recover);
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 24px 0;
+    }
+
+    .tooltip {
+      font-size: 0.7rem;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 12px;
+      margin-top: 8px;
+      line-height: 1.6;
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 12px 0;
+    }
+
+    .radio-btn {
+      padding: 8px 18px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      background: transparent;
+      transition: all 0.2s;
+    }
+
+    #rag-svg-wrap,
+    #wfg-svg-wrap {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .radio-btn.selected-recover {
+      border-color: var(--accent-recover);
+      color: var(--accent-recover);
+      background: rgba(255, 165, 2, 0.08);
+    }
+
+    .radio-btn.selected-prevent {
+      border-color: var(--accent-prevent);
+      color: var(--accent-prevent);
+      background: rgba(46, 213, 115, 0.08);
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div>
+      <div class="logo">DEAD<span>LOCK</span> TOOLKIT</div>
+      <div class="subtitle">Operating System — Unit 4 · Deadlock Protection &amp; Security</div>
+    </div>
+    <div class="status-badge">
+      <div class="status-dot"></div>
+      SYSTEM MONITOR ACTIVE
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="detect" onclick="switchTab('detect')">
+      <span class="tab-icon">⚠️</span>
+      Deadlock Detection
+    </button>
+    <button class="tab" data-tab="prevent" onclick="switchTab('prevent')">
+      <span class="tab-icon">🛡️</span>
+      Deadlock Prevention
+    </button>
+    <button class="tab" data-tab="recover" onclick="switchTab('recover')">
+      <span class="tab-icon">🔄</span>
+      Deadlock Recovery
+    </button>
+  </div>
+
+  <!-- ======== DETECTION PANEL ======== -->
+  <div id="panel-detect" class="panel active">
+    <div class="container">
+      <div class="section-title" style="color:var(--accent-detect)">⚠ Deadlock Detection</div>
+      <div class="section-desc">
+        Build a Resource Allocation Graph (RAG) by specifying processes, resources, and their relationships.
+        The system will detect cycles and identify deadlocked processes using Wait-For Graph analysis.
+      </div>
+
+      <!-- Config -->
+      <div class="card">
+        <div class="card-title">
+          <div class="num" style="background:rgba(255,71,87,0.15);color:var(--accent-detect)">01</div>
+          System Configuration
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label>Number of Processes</label>
+            <input type="number" id="d-procs" value="3" min="2" max="6" onchange="buildDetectInputs()">
+          </div>
+          <div class="input-group">
+            <label>Number of Resources</label>
+            <input type="number" id="d-res" value="2" min="1" max="4" onchange="buildDetectInputs()">
+          </div>
+          <div class="input-group">
+            <label>Resource Instances (comma-sep)</label>
+            <input type="text" id="d-instances" value="1,1" placeholder="e.g. 1,2">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn btn-detect" onclick="buildDetectInputs()">Build Graph Inputs</button>
+          <button class="btn btn-outline" onclick="loadDetectExample(1)">Example: Deadlock</button>
+          <button class="btn btn-outline" onclick="loadDetectExample(2)">Example: No Deadlock</button>
+        </div>
+      </div>
+
+      <!-- Matrix Inputs -->
+      <div id="detect-inputs" class="two-col">
+        <div class="card">
+          <div class="card-title">
+            <div class="num" style="background:rgba(255,71,87,0.15);color:var(--accent-detect)">02</div>
+            Allocation Matrix (Resource → Process)
+          </div>
+          <div class="matrix-wrap" id="alloc-table-wrap"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">
+            <div class="num" style="background:rgba(255,71,87,0.15);color:var(--accent-detect)">03</div>
+            Request Matrix (Process → Resource)
+          </div>
+          <div class="matrix-wrap" id="req-table-wrap"></div>
+        </div>
+      </div>
+
+      <!-- Run -->
+      <div style="text-align:center;margin:16px 0">
+        <button class="btn btn-detect" onclick="runDetection()" style="padding:14px 48px;font-size:0.9rem">
+          ▶ RUN DETECTION ALGORITHM
+        </button>
+      </div>
+
+      <!-- Results -->
+      <div class="two-col">
+        <div>
+          <div class="card-title" style="padding:0 0 16px">
+            <div class="num" style="background:rgba(255,71,87,0.15);color:var(--accent-detect)">04</div>
+            Resource Allocation Graph (RAG)
+          </div>
+          <div id="rag-svg-wrap"
+            style="background:var(--bg);border:1px solid var(--border);border-radius:6px;min-height:340px;"></div>
+        </div>
+        <div>
+          <div class="card-title" style="padding:0 0 16px">
+            <div class="num" style="background:rgba(255,71,87,0.15);color:var(--accent-detect)">05</div>
+            Wait-For Graph (WFG)
+          </div>
+          <div id="wfg-svg-wrap"
+            style="background:var(--bg);border:1px solid var(--border);border-radius:6px;min-height:340px;"></div>
+        </div>
+      </div>
+
+      <div id="detect-result" class="result-box"></div>
+
+      <div class="log" id="detect-log">
+        <span class="log-step">// Awaiting input — configure processes and resources above ...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== PREVENTION PANEL ======== -->
+  <div id="panel-prevent" class="panel">
+    <div class="container">
+      <div class="section-title" style="color:var(--accent-prevent)">🛡 Deadlock Prevention — Banker's Algorithm</div>
+      <div class="section-desc">
+        Deadlock prevention ensures the system remains in a <strong>safe state</strong> by evaluating resource requests
+        before allocation. Uses Banker's Algorithm to find a safe execution sequence.
+      </div>
+
+      <div class="three-col">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-procs" style="color:var(--accent-prevent)">0</div>
+          <div class="stat-label">Processes</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-res-types" style="color:var(--accent-prevent)">0</div>
+          <div class="stat-label">Resource Types</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-state" style="color:var(--accent-prevent)">—</div>
+          <div class="stat-label">System State</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <div class="num" style="background:rgba(46,213,115,0.15);color:var(--accent-prevent)">01</div>
+          System Setup
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label>Processes (n)</label>
+            <input type="number" id="p-procs" value="5" min="2" max="8" onchange="buildBankerInputs()">
+          </div>
+          <div class="input-group">
+            <label>Resource Types (m)</label>
+            <input type="number" id="p-res" value="3" min="1" max="5" onchange="buildBankerInputs()">
+          </div>
+          <div class="input-group">
+            <label>Total Resources (A,B,C...)</label>
+            <input type="text" id="p-total" value="10,5,7" placeholder="comma-separated">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn btn-prevent" onclick="buildBankerInputs()">Setup Matrices</button>
+          <button class="btn btn-outline" onclick="loadBankerExample(1)">Q1 Example (Safe)</button>
+          <button class="btn btn-outline" onclick="loadBankerExample(2)">Q2 Example (Unsafe)</button>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">
+            <div class="num" style="background:rgba(46,213,115,0.15);color:var(--accent-prevent)">02</div>
+            Allocation Matrix
+          </div>
+          <div class="matrix-wrap" id="banker-alloc-wrap"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">
+            <div class="num" style="background:rgba(46,213,115,0.15);color:var(--accent-prevent)">03</div>
+            Maximum Matrix
+          </div>
+          <div class="matrix-wrap" id="banker-max-wrap"></div>
+        </div>
+      </div>
+
+      <div style="text-align:center;margin:16px 0">
+        <button class="btn btn-prevent" onclick="runBanker()" style="padding:14px 48px;font-size:0.9rem">
+          ▶ RUN BANKER'S ALGORITHM
+        </button>
+      </div>
+
+      <!-- Need & Result -->
+      <div class="card" id="banker-need-card" style="display:none">
+        <div class="card-title">
+          <div class="num" style="background:rgba(46,213,115,0.15);color:var(--accent-prevent)">04</div>
+          Need Matrix (Max - Allocation) & Available Resources
+        </div>
+        <div class="matrix-wrap" id="banker-need-wrap"></div>
+      </div>
+
+      <div id="prevent-result" class="result-box"></div>
+
+      <!-- Safe Sequence Animation -->
+      <div id="safe-seq-box" style="display:none" class="card">
+        <div class="card-title">
+          <div class="num" style="background:rgba(46,213,115,0.15);color:var(--accent-prevent)">05</div>
+          Safe Execution Sequence
+        </div>
+        <div class="sequence" id="safe-sequence"></div>
+        <div class="steps" id="banker-steps"></div>
+      </div>
+
+      <div class="log" id="prevent-log">
+        <span class="log-step">// Awaiting Banker's Algorithm input ...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== RECOVERY PANEL ======== -->
+  <div id="panel-recover" class="panel">
+    <div class="container">
+      <div class="section-title" style="color:var(--accent-recover)">🔄 Deadlock Recovery</div>
+      <div class="section-desc">
+        Once a deadlock is detected, the system must recover. Simulate three recovery methods:
+        <strong>Process Termination</strong>, <strong>Rollback (Checkpoint)</strong>, and <strong>Resource
+          Preemption</strong>.
+      </div>
+
+      <!-- Method Selection -->
+      <div class="card">
+        <div class="card-title">
+          <div class="num" style="background:rgba(255,165,2,0.15);color:var(--accent-recover)">01</div>
+          Configure Deadlock Scenario
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label>Processes in Deadlock</label>
+            <input type="number" id="r-procs" value="3" min="2" max="6" onchange="buildRecoveryInputs()">
+          </div>
+          <div class="input-group">
+            <label>Resources</label>
+            <input type="number" id="r-res" value="2" min="1" max="4" onchange="buildRecoveryInputs()">
+          </div>
+        </div>
+        <div id="recovery-proc-config"></div>
+
+        <hr class="divider">
+        <div class="card-title" style="margin-bottom:12px">
+          <div class="num" style="background:rgba(255,165,2,0.15);color:var(--accent-recover)">02</div>
+          Recovery Method
+        </div>
+        <div class="radio-group" id="recovery-method-group">
+          <button class="radio-btn selected-recover" onclick="selectMethod('terminate')">Process Termination</button>
+          <button class="radio-btn" onclick="selectMethod('rollback')">Rollback (Checkpoint)</button>
+          <button class="radio-btn" onclick="selectMethod('preemption')">Resource Preemption</button>
+        </div>
+        <div id="method-desc" class="tooltip">
+          <strong>Process Termination:</strong> The OS kills one or more processes in the deadlock cycle to release
+          resources.
+          Processes are chosen based on priority, work done, and resources held.
+        </div>
+        <div style="margin-top:16px">
+          <button class="btn btn-recover" onclick="simulateRecovery()" style="padding:14px 48px">
+            ▶ SIMULATE RECOVERY
+          </button>
+          <button class="btn btn-outline" onclick="resetRecovery()">Reset</button>
+        </div>
+      </div>
+
+      <!-- Process Nodes -->
+      <div class="card">
+        <div class="card-title">
+          <div class="num" style="background:rgba(255,165,2,0.15);color:var(--accent-recover)">03</div>
+          Process States
+        </div>
+        <div class="process-grid" id="proc-nodes"></div>
+      </div>
+
+      <!-- Recovery Steps -->
+      <div class="card" id="recovery-steps-card">
+        <div class="card-title">
+          <div class="num" style="background:rgba(255,165,2,0.15);color:var(--accent-recover)">04</div>
+          Recovery Execution Log
+        </div>
+        <div class="steps" id="recovery-steps-list"></div>
+      </div>
+
+      <div id="recover-result" class="result-box"></div>
+      <div class="log" id="recover-log">
+        <span class="log-step">// Configure and simulate a deadlock recovery scenario ...</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // STATE
+    // ============================================================
+    let currentTab = 'detect';
+    let detectData = { procs: 3, res: 2, instances: [1, 1], alloc: [], req: [] };
+    let bankerData = { procs: 5, res: 3, total: [10, 5, 7], alloc: [], max: [] };
+    let recoveryMethod = 'terminate';
+
+    // ============================================================
+    // TAB SWITCHING
+    // ============================================================
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+      document.getElementById(`panel-${tab}`).classList.add('active');
+
+      if (tab === 'recover') buildRecoveryInputs();
+    }
+
+    // ============================================================
+    // UTILS
+    // ============================================================
+    function log(id, msg, cls = 'log-step') {
+      const el = document.getElementById(id);
+      el.innerHTML += `<div class="${cls}">> ${msg}</div>`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function clearLog(id) {
+      document.getElementById(id).innerHTML = '';
+    }
+
+    function makeTable(rows, cols, prefix, resNames, showProcess = true) {
+      const colNames = resNames || Array.from({ length: cols }, (_, i) => String.fromCharCode(65 + i));
+      let h = '<table><thead><tr>';
+      if (showProcess) h += '<th>Process</th>';
+      colNames.forEach(c => h += `<th>${c}</th>`);
+      h += '</tr></thead><tbody>';
+      for (let i = 0; i < rows; i++) {
+        h += `<tr><td>P${i}</td>`;
+        colNames.forEach((c, j) => {
+          h += `<td><input type="number" min="0" max="20" value="0" id="${prefix}_${i}_${j}" style="width:52px;text-align:center;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:monospace"></td>`;
+        });
+        h += '</tr>';
+      }
+      h += '</tbody></table>';
+      return h;
+    }
+
+    function getMatrix(prefix, rows, cols) {
+      let m = [];
+      for (let i = 0; i < rows; i++) {
+        let r = [];
+        for (let j = 0; j < cols; j++) {
+          r.push(parseInt(document.getElementById(`${prefix}_${i}_${j}`)?.value || 0));
+        }
+        m.push(r);
+      }
+      return m;
+    }
+
+    function setMatrix(prefix, m) {
+      m.forEach((row, i) => row.forEach((val, j) => {
+        const el = document.getElementById(`${prefix}_${i}_${j}`);
+        if (el) el.value = val;
+      }));
+    }
+
+    // ============================================================
+    // DETECTION
+    // ============================================================
+    function buildDetectInputs() {
+      const p = parseInt(document.getElementById('d-procs').value);
+      const r = parseInt(document.getElementById('d-res').value);
+      const resNames = Array.from({ length: r }, (_, i) => 'R' + (i + 1));
+      document.getElementById('alloc-table-wrap').innerHTML = makeTable(p, r, 'alloc', resNames);
+      document.getElementById('req-table-wrap').innerHTML = makeTable(p, r, 'req', resNames);
+      document.getElementById('rag-svg-wrap').innerHTML = '';
+      document.getElementById('wfg-svg-wrap').innerHTML = '';
+      document.getElementById('detect-result').className = 'result-box';
+      clearLog('detect-log');
+      log('detect-log', 'Graph inputs built. Fill allocation and request matrices, then run detection.', 'log-step');
+    }
+
+    function loadDetectExample(n) {
+      if (n === 1) {
+        // Classic deadlock: P1 holds R1 waits R2, P2 holds R2 waits R1
+        document.getElementById('d-procs').value = 3;
+        document.getElementById('d-res').value = 2;
+        document.getElementById('d-instances').value = '1,1';
+        buildDetectInputs();
+        setMatrix('alloc', [[1, 0], [0, 1], [0, 0]]);
+        setMatrix('req', [[0, 1], [1, 0], [0, 0]]);
+        log('detect-log', 'Loaded: Deadlock Example — P0 holds R1 needs R2; P1 holds R2 needs R1', 'log-warn');
+      } else {
+        document.getElementById('d-procs').value = 3;
+        document.getElementById('d-res').value = 2;
+        document.getElementById('d-instances').value = '1,2';
+        buildDetectInputs();
+        setMatrix('alloc', [[1, 0], [0, 1], [0, 1]]);
+        setMatrix('req', [[0, 1], [1, 0], [0, 0]]);
+        log('detect-log', 'Loaded: No Deadlock Example — P2 can finish and release R2', 'log-safe');
+      }
+    }
+
+    function runDetection() {
+      const p = parseInt(document.getElementById('d-procs').value);
+      const r = parseInt(document.getElementById('d-res').value);
+      const instStr = document.getElementById('d-instances').value;
+      const instances = instStr.split(',').map(x => parseInt(x.trim()) || 1);
+
+      while (instances.length < r) instances.push(1);
+
+      const alloc = getMatrix('alloc', p, r);
+      const req = getMatrix('req', p, r);
+
+      clearLog('detect-log');
+      log('detect-log', `Starting detection: ${p} processes, ${r} resources`, 'log-step');
+
+      // Calculate available
+      const available = instances.slice();
+      for (let i = 0; i < p; i++) for (let j = 0; j < r; j++) available[j] -= alloc[i][j];
+
+      log('detect-log', `Available: [${available.join(', ')}]`, 'log-step');
+
+      // Build Wait-For Graph
+      const wfg = Array.from({ length: p }, () => Array(p).fill(false));
+
+      // If Pi requests Rj and Rj is held by Pk → Pi waits for Pk
+      for (let i = 0; i < p; i++) {
+        for (let j = 0; j < r; j++) {
+          if (req[i][j] > 0) {
+            for (let k = 0; k < p; k++) {
+              if (k !== i && alloc[k][j] > 0) {
+                wfg[i][k] = true;
+                log('detect-log', `P${i} is waiting for P${k} (resource R${j + 1})`, 'log-warn');
+              }
+            }
+          }
+        }
+      }
+
+      // Detect cycle using DFS
+      const visited = Array(p).fill(false);
+      const inStack = Array(p).fill(false);
+      let cycleNodes = [];
+
+      function dfs(v) {
+        visited[v] = true;
+        inStack[v] = true;
+        for (let u = 0; u < p; u++) {
+          if (wfg[v][u]) {
+            if (!visited[u]) {
+              if (dfs(u)) return true;
+            } else if (inStack[u]) {
+              cycleNodes.push(u);
+              cycleNodes.push(v);
+              return true;
+            }
+          }
+        }
+        inStack[v] = false;
+        return false;
+      }
+
+      let deadlock = false;
+      for (let i = 0; i < p; i++) if (!visited[i]) if (dfs(i)) { deadlock = true; break; }
+
+      // Draw SVG graphs
+      drawRAG(p, r, instances, alloc, req, deadlock, cycleNodes);
+      drawWFG(p, wfg, deadlock, cycleNodes);
+
+      const resultEl = document.getElementById('detect-result');
+      resultEl.classList.add('show');
+
+      if (deadlock) {
+        const cn = [...new Set(cycleNodes)].map(x => 'P' + x).join(', ');
+        resultEl.className = 'result-box result-unsafe show';
+        resultEl.innerHTML = `
+      <div class="result-title" style="color:var(--accent-detect)">⚠ DEADLOCK DETECTED</div>
+      <div>A cycle was found in the Wait-For Graph. The following processes are deadlocked: <strong>${cn}</strong></div>
+      <br>
+      <div><strong>Conditions met:</strong> Mutual Exclusion · Hold &amp; Wait · No Preemption · Circular Wait</div>
+      <div style="margin-top:8px;color:var(--muted)">Recommended action: Proceed to <strong>Recovery</strong> tab to resolve the deadlock.</div>
+    `;
+        log('detect-log', `DEADLOCK DETECTED → Cycle involves: ${cn}`, 'log-err');
+      } else {
+        resultEl.className = 'result-box result-safe show';
+        resultEl.innerHTML = `
+      <div class="result-title" style="color:var(--accent-prevent)">✓ NO DEADLOCK</div>
+      <div>No cycle found in the Wait-For Graph. The system can continue execution normally.</div>
+      <div style="margin-top:8px;color:var(--muted)">All processes can eventually complete their execution.</div>
+    `;
+        log('detect-log', `No cycle found — System is deadlock-free ✓`, 'log-safe');
+      }
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 50);
+    }
+
+    // ============================================================
+    // HTML/CSS GRAPH DRAWING (pure divs — works in any browser)
+    // ============================================================
+
+    // Draw a line between two points using a rotated div
+    function htmlLine(container, x1, y1, x2, y2, color, width) {
+      const dx = x2 - x1, dy = y2 - y1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 2) return;
+      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      const line = document.createElement('div');
+      line.style.cssText = `position:absolute;left:${x1}px;top:${y1}px;width:${len}px;height:${width || 2}px;background:${color};transform-origin:0 50%;transform:rotate(${angle}deg);pointer-events:none;z-index:2;`;
+      container.appendChild(line);
+    }
+
+    // Draw an arrowhead (CSS triangle) at a point facing a given angle
+    function htmlArrowHead(container, x, y, angleDeg, color, size) {
+      size = size || 10;
+      const arrow = document.createElement('div');
+      arrow.style.cssText = `position:absolute;left:${x - size}px;top:${y - size / 2}px;width:0;height:0;border-left:${size}px solid ${color};border-top:${size / 2}px solid transparent;border-bottom:${size / 2}px solid transparent;transform-origin:${size}px 50%;transform:rotate(${angleDeg}deg);pointer-events:none;z-index:3;`;
+      container.appendChild(arrow);
+    }
+
+    // Draw a label at a position
+    function htmlLabel(container, x, y, text, color) {
+      const lbl = document.createElement('div');
+      lbl.style.cssText = `position:absolute;left:${x}px;top:${y}px;transform:translate(-50%,-50%);font-size:10px;font-family:'Space Mono',monospace;color:${color};pointer-events:none;z-index:3;white-space:nowrap;`;
+      lbl.textContent = text;
+      container.appendChild(lbl);
+    }
+
+    // Draw an arrow (line + arrowhead + optional label) between two points
+    function htmlArrow(container, x1, y1, x2, y2, color, label) {
+      const dx = x2 - x1, dy = y2 - y1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 4) return;
+      const angleDeg = Math.atan2(dy, dx) * 180 / Math.PI;
+      // Shorten line slightly so arrowhead sits at the end
+      const shortenBy = 8;
+      const ratio = (len - shortenBy) / len;
+      const ex = x1 + dx * ratio, ey = y1 + dy * ratio;
+      htmlLine(container, x1, y1, ex, ey, color, 2);
+      htmlArrowHead(container, x2, y2, angleDeg, color, 10);
+      if (label) {
+        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        const angle = Math.atan2(dy, dx);
+        const lx = mx + 12 * Math.sin(angle), ly = my - 12 * Math.cos(angle);
+        htmlLabel(container, lx, ly, label, color);
+      }
+    }
+
+    // Draw a curved arrow using multiple small line segments (bezier approximation)
+    function htmlCurvedArrow(container, x1, y1, x2, y2, color) {
+      const dx = x2 - x1, dy = y2 - y1;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 4) return;
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      const cpx = mx - 30 * (dy / dist), cpy = my + 30 * (dx / dist);
+      // Shorten start/end to avoid overlapping nodes
+      const startAngle = Math.atan2(cpy - y1, cpx - x1);
+      const endAngle = Math.atan2(y2 - cpy, x2 - cpx);
+      const sx = x1 + 24 * Math.cos(startAngle), sy = y1 + 24 * Math.sin(startAngle);
+      const ex = x2 - 24 * Math.cos(endAngle), ey = y2 - 24 * Math.sin(endAngle);
+      // Draw bezier as small line segments
+      const segments = 20;
+      let prevX = sx, prevY = sy;
+      for (let t = 1; t <= segments; t++) {
+        const tt = t / segments;
+        const u = 1 - tt;
+        const px = u * u * sx + 2 * u * tt * cpx + tt * tt * ex;
+        const py = u * u * sy + 2 * u * tt * cpy + tt * tt * ey;
+        htmlLine(container, prevX, prevY, px, py, color, 2);
+        prevX = px;
+        prevY = py;
+      }
+      // Arrowhead at end
+      const arrAngle = Math.atan2(ey - cpy, ex - cpx) * 180 / Math.PI;
+      htmlArrowHead(container, ex, ey, arrAngle, color, 10);
+    }
+
+    // Create a circular node (process)
+    function htmlCircleNode(container, x, y, radius, text, fillColor, strokeColor, textColor, glow) {
+      const node = document.createElement('div');
+      node.style.cssText = `position:absolute;left:${x - radius}px;top:${y - radius}px;width:${radius * 2}px;height:${radius * 2}px;border-radius:50%;background:${fillColor};border:2px solid ${strokeColor};display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:${textColor};z-index:4;${glow ? 'box-shadow:0 0 12px ' + strokeColor + ';' : ''}`;
+      node.textContent = text;
+      container.appendChild(node);
+    }
+
+    // Create a rectangular node (resource)
+    function htmlRectNode(container, x, y, w, h, text, instances, fillColor, strokeColor, textColor) {
+      const node = document.createElement('div');
+      node.style.cssText = `position:absolute;left:${x - w / 2}px;top:${y - h / 2}px;width:${w}px;height:${h}px;border-radius:4px;background:${fillColor};border:2px solid ${strokeColor};display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;color:${textColor};z-index:4;`;
+      // Instance dots
+      if (instances > 0) {
+        const dotsDiv = document.createElement('div');
+        dotsDiv.style.cssText = 'display:flex;gap:3px;margin-bottom:2px;';
+        for (let d = 0; d < Math.min(instances, 3); d++) {
+          const dot = document.createElement('div');
+          dot.style.cssText = `width:6px;height:6px;border-radius:50%;background:${strokeColor};`;
+          dotsDiv.appendChild(dot);
+        }
+        node.appendChild(dotsDiv);
+      }
+      const label = document.createElement('span');
+      label.textContent = text;
+      node.appendChild(label);
+      container.appendChild(node);
+    }
+
+    function drawRAG(p, r, instances, alloc, req, deadlock, cycleNodes) {
+      const container = document.getElementById('rag-svg-wrap');
+      const rect = container.getBoundingClientRect();
+
+      const W = rect.width || 500;
+      const H = 340;
+      container.innerHTML = '';
+      container.style.position = 'relative';
+      container.style.width = '100%';
+      container.style.height = H + 'px';
+      container.style.overflow = 'hidden';
+
+      // Scale factor: the container might be wider/narrower than 500px
+      // We'll use percentage-based positioning relative to W/H internally
+      const pH = H / (p + 1), rH = H / (r + 1);
+      const pPos = Array.from({ length: p }, (_, i) => ({ x: W * 0.22, y: pH * (i + 1) }));
+      const rPos = Array.from({ length: r }, (_, j) => ({ x: W * 0.72, y: rH * (j + 1) }));
+
+      // Use an inner div scaled to match layout
+      const inner = document.createElement('div');
+      inner.style.cssText = `position:relative;width:100%;height:${H}px;`;
+      container.appendChild(inner);
+
+      // Draw allocation edges: R → P (green)
+      for (let i = 0; i < p; i++) for (let j = 0; j < r; j++) {
+        if (alloc[i][j] > 0) {
+          const ang = Math.atan2(pPos[i].y - rPos[j].y, pPos[i].x - rPos[j].x);
+          const sx = rPos[j].x + 26 * Math.cos(ang), sy = rPos[j].y + 20 * Math.sin(ang);
+          const ex = pPos[i].x - 24 * Math.cos(ang), ey = pPos[i].y - 24 * Math.sin(ang);
+          htmlArrow(inner, sx, sy, ex, ey, '#2ed573', '×' + alloc[i][j]);
+        }
+      }
+
+      // Draw request edges: P → R (orange/red)
+      for (let i = 0; i < p; i++) for (let j = 0; j < r; j++) {
+        if (req[i][j] > 0) {
+          const color = (deadlock && cycleNodes.includes(i)) ? '#ff4757' : '#ffa502';
+          const ang = Math.atan2(rPos[j].y - pPos[i].y, rPos[j].x - pPos[i].x);
+          const sx = pPos[i].x + 24 * Math.cos(ang), sy = pPos[i].y + 24 * Math.sin(ang);
+          const ex = rPos[j].x - 26 * Math.cos(ang), ey = rPos[j].y - 20 * Math.sin(ang);
+          htmlArrow(inner, sx, sy, ex, ey, color, '×' + req[i][j]);
+        }
+      }
+
+      // Draw process nodes (circles)
+      pPos.forEach((pos, i) => {
+        const stuck = deadlock && cycleNodes.includes(i);
+        htmlCircleNode(inner, pos.x, pos.y, 22,
+          'P' + i,
+          stuck ? 'rgba(255,71,87,0.25)' : 'rgba(46,213,115,0.12)',
+          stuck ? '#ff4757' : '#2ed573',
+          stuck ? '#ff4757' : '#e8eaf0',
+          stuck
+        );
+      });
+
+      // Draw resource nodes (rectangles)
+      rPos.forEach((pos, j) => {
+        htmlRectNode(inner, pos.x, pos.y, 52, 40,
+          'R' + (j + 1),
+          instances[j] || 1,
+          'rgba(255,165,2,0.12)', '#ffa502', '#ffa502'
+        );
+      });
+
+      // Legend
+      const legend = document.createElement('div');
+      legend.style.cssText = 'position:absolute;left:10px;bottom:6px;font-size:11px;font-family:"Space Mono",monospace;color:#6b7280;z-index:5;';
+      legend.textContent = '● Process  ■ Resource  → Allocation  ⇢ Request';
+      inner.appendChild(legend);
+    }
+
+    function drawWFG(p, wfg, deadlock, cycleNodes) {
+      const container = document.getElementById('wfg-svg-wrap');
+      const rect = container.getBoundingClientRect();
+
+      const W = rect.width || 500;
+      const H = 340;
+      container.innerHTML = '';
+      container.style.position = 'relative';
+      container.style.width = '100%';
+      container.style.height = H + 'px';
+      container.style.overflow = 'hidden';
+
+      const inner = document.createElement('div');
+      inner.style.cssText = `position:relative;width:100%;height:${H}px;`;
+      container.appendChild(inner);
+
+      const cx = W / 2, cy = 160, rad = 120;
+      const pos = Array.from({ length: p }, (_, i) => ({
+        x: cx + rad * Math.cos((2 * Math.PI * i / p) - Math.PI / 2),
+        y: cy + rad * Math.sin((2 * Math.PI * i / p) - Math.PI / 2)
+      }));
+
+      // Draw edges
+      for (let i = 0; i < p; i++) for (let j = 0; j < p; j++) {
+        if (wfg[i][j]) {
+          const inCycle = deadlock && cycleNodes.includes(i) && cycleNodes.includes(j);
+          const color = inCycle ? '#ff4757' : '#ffa502';
+          htmlCurvedArrow(inner, pos[i].x, pos[i].y, pos[j].x, pos[j].y, color);
+        }
+      }
+
+      // Draw process nodes
+      pos.forEach((pt, i) => {
+        const stuck = deadlock && cycleNodes.includes(i);
+        htmlCircleNode(inner, pt.x, pt.y, 24,
+          'P' + i,
+          stuck ? 'rgba(255,71,87,0.25)' : 'rgba(255,165,2,0.1)',
+          stuck ? '#ff4757' : '#6b7280',
+          stuck ? '#ff4757' : '#e8eaf0',
+          stuck
+        );
+      });
+
+      // Status text
+      const statusText = deadlock ? '⚠ CYCLE DETECTED → DEADLOCK' : '✓ NO CYCLE → SAFE';
+      const statusColor = deadlock ? '#ff4757' : '#2ed573';
+      const status = document.createElement('div');
+      status.style.cssText = `position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:12px;font-family:"Space Mono",monospace;color:${statusColor};z-index:5;`;
+      status.textContent = statusText;
+      inner.appendChild(status);
+    }
+
+    // ============================================================
+    // BANKER'S ALGORITHM
+    // ============================================================
+    function buildBankerInputs() {
+      const p = parseInt(document.getElementById('p-procs').value);
+      const r = parseInt(document.getElementById('p-res').value);
+      const resNames = Array.from({ length: r }, (_, i) => String.fromCharCode(65 + i));
+
+      document.getElementById('banker-alloc-wrap').innerHTML = makeTable(p, r, 'ba', resNames);
+      document.getElementById('banker-max-wrap').innerHTML = makeTable(p, r, 'bm', resNames);
+      document.getElementById('banker-need-card').style.display = 'none';
+      document.getElementById('safe-seq-box').style.display = 'none';
+      document.getElementById('prevent-result').className = 'result-box';
+      clearLog('prevent-log');
+      document.getElementById('stat-procs').textContent = p;
+      document.getElementById('stat-res-types').textContent = r;
+      document.getElementById('stat-state').textContent = '—';
+      log('prevent-log', 'Banker matrices built. Fill Allocation and Maximum values, then run algorithm.', 'log-step');
+    }
+
+    function loadBankerExample(n) {
+      if (n === 1) {
+        // Q1 from PDF (Safe)
+        document.getElementById('p-procs').value = 5;
+        document.getElementById('p-res').value = 3;
+        document.getElementById('p-total').value = '10,5,7';
+        buildBankerInputs();
+        const alloc = [[0, 1, 0], [2, 0, 0], [3, 0, 2], [2, 1, 1], [0, 0, 2]];
+        const max = [[7, 5, 3], [3, 2, 2], [9, 0, 2], [2, 2, 2], [4, 3, 3]];
+        setMatrix('ba', alloc);
+        setMatrix('bm', max);
+        log('prevent-log', 'Loaded Q1 example from PDF (Expected: SAFE — P1→P3→P4→P2→P0)', 'log-safe');
+      } else {
+        // Q2 from PDF (Unsafe)
+        document.getElementById('p-procs').value = 5;
+        document.getElementById('p-res').value = 3;
+        document.getElementById('p-total').value = '9,3,6';  // derived from Q2 available (2,2,1)
+        buildBankerInputs();
+        const alloc = [[0, 1, 0], [2, 0, 0], [3, 0, 2], [2, 1, 1], [0, 0, 2]];
+        const max = [[7, 5, 3], [3, 2, 2], [9, 0, 2], [4, 2, 2], [5, 3, 3]];
+        setMatrix('ba', alloc);
+        setMatrix('bm', max);
+        log('prevent-log', 'Loaded Q2 example from PDF (Expected: UNSAFE — P0 cannot complete)', 'log-warn');
+      }
+    }
+
+    function runBanker() {
+      const p = parseInt(document.getElementById('p-procs').value);
+      const r = parseInt(document.getElementById('p-res').value);
+      const totalStr = document.getElementById('p-total').value;
+      const total = totalStr.split(',').map(x => parseInt(x.trim()) || 0);
+
+      const alloc = getMatrix('ba', p, r);
+      const max = getMatrix('bm', p, r);
+
+      clearLog('prevent-log');
+      log('prevent-log', `Banker's Algorithm started: ${p} processes, ${r} resources`, 'log-step');
+
+      // Calc need
+      const need = alloc.map((row, i) => row.map((v, j) => max[i][j] - v));
+      const available = total.slice();
+      for (let i = 0; i < p; i++) for (let j = 0; j < r; j++) available[j] -= alloc[i][j];
+
+      const resNames = Array.from({ length: r }, (_, i) => String.fromCharCode(65 + i));
+      log('prevent-log', `Available: [${available.join(', ')}]`, 'log-step');
+
+      // Show Need matrix
+      const needCard = document.getElementById('banker-need-card');
+      needCard.style.display = 'block';
+      let needHTML = `<table><thead><tr><th>Process</th>`;
+      resNames.forEach(n => needHTML += `<th>Need-${n}</th>`);
+      resNames.forEach(n => needHTML += `<th>Avail-${n}</th>`);
+      needHTML += `</tr></thead><tbody>`;
+      need.forEach((row, i) => {
+        needHTML += `<tr><td>P${i}</td>${row.map(v => `<td>${v}</td>`).join('')}`;
+        if (i === 0) {
+          needHTML += available.map(v => `<td style="color:var(--accent-prevent)">${v}</td>`).join('');
+        } else {
+          needHTML += available.map(() => `<td>—</td>`).join('');
+        }
+        needHTML += '</tr>';
+      });
+      needHTML += '</tbody></table>';
+      document.getElementById('banker-need-wrap').innerHTML = needHTML;
+
+      // Safety Algorithm
+      const finish = Array(p).fill(false);
+      const safeSeq = [];
+      const work = available.slice();
+      const steps = [];
+
+      let found = true;
+      while (found) {
+        found = false;
+        for (let i = 0; i < p; i++) {
+          if (!finish[i] && need[i].every((v, j) => v <= work[j])) {
+            const before = work.slice();
+            for (let j = 0; j < r; j++) work[j] += alloc[i][j];
+            finish[i] = true;
+            safeSeq.push(i);
+            found = true;
+            steps.push({
+              proc: i,
+              need: need[i].slice(),
+              before,
+              after: work.slice(),
+              alloc: alloc[i].slice()
+            });
+            log('prevent-log', `P${i}: Need[${need[i].join(',')}] ≤ Available[${before.join(',')}] → Execute → New Available: [${work.join(',')}]`, 'log-safe');
+            break;
+          }
+        }
+      }
+
+      const isSafe = finish.every(f => f);
+      document.getElementById('stat-state').textContent = isSafe ? 'SAFE' : 'UNSAFE';
+      document.getElementById('stat-state').style.color = isSafe ? 'var(--accent-prevent)' : 'var(--accent-detect)';
+      document.getElementById('stat-procs').textContent = p;
+      document.getElementById('stat-res-types').textContent = r;
+
+      const resultEl = document.getElementById('prevent-result');
+      resultEl.classList.add('show');
+
+      if (isSafe) {
+        resultEl.className = 'result-box result-safe show';
+        resultEl.innerHTML = `
+      <div class="result-title" style="color:var(--accent-prevent)">✓ SYSTEM IS IN SAFE STATE</div>
+      <div>A safe sequence exists. All processes can complete without deadlock.</div>
+      <div style="margin-top:8px"><strong>Safe Sequence:</strong> ${safeSeq.map(x => 'P' + x).join(' → ')}</div>
+    `;
+        log('prevent-log', `SAFE STATE → Safe sequence: ${safeSeq.map(x => 'P' + x).join(' → ')}`, 'log-safe');
+        showSafeSequence(safeSeq, steps, resNames);
+      } else {
+        const incomplete = finish.map((f, i) => !f ? 'P' + i : null).filter(Boolean);
+        resultEl.className = 'result-box result-unsafe show';
+        resultEl.innerHTML = `
+      <div class="result-title" style="color:var(--accent-detect)">⚠ UNSAFE STATE — DEADLOCK POSSIBLE</div>
+      <div>No safe sequence exists. Processes that cannot complete: <strong>${incomplete.join(', ')}</strong></div>
+      <div style="margin-top:8px;color:var(--muted)">The system may lead to deadlock. Consider using Recovery methods.</div>
+    `;
+        log('prevent-log', `UNSAFE STATE → Cannot complete: ${incomplete.join(', ')}`, 'log-err');
+        document.getElementById('safe-seq-box').style.display = 'none';
+      }
+    }
+
+    function showSafeSequence(seq, steps, resNames) {
+      const box = document.getElementById('safe-seq-box');
+      box.style.display = 'block';
+
+      // Animate sequence
+      const seqEl = document.getElementById('safe-sequence');
+      seqEl.innerHTML = seq.map((p, i) => `
+    <div class="seq-item" id="seq-${i}" style="background:rgba(46,213,115,0.1);border:1px solid var(--accent-prevent);color:var(--accent-prevent)">P${p}</div>
+    ${i < seq.length - 1 ? `<div class="seq-arrow" id="seqarrow-${i}">→</div>` : ''}
+  `).join('');
+
+      seq.forEach((_, i) => {
+        setTimeout(() => {
+          const el = document.getElementById(`seq-${i}`);
+          const ar = document.getElementById(`seqarrow-${i}`);
+          if (el) { el.style.opacity = '1'; el.style.transform = 'scale(1)'; }
+          if (ar) ar.style.opacity = '1';
+        }, i * 300 + 200);
+      });
+
+      // Steps
+      const stepsEl = document.getElementById('banker-steps');
+      stepsEl.innerHTML = steps.map((s, i) => `
+    <div class="step-item" id="bstep-${i}">
+      <div class="step-num" style="background:rgba(46,213,115,0.15);color:var(--accent-prevent)">${i + 1}</div>
+      <div class="step-content">
+        <div class="step-title">Execute P${s.proc}</div>
+        <div class="step-desc">
+          Need [${s.need.join(', ')}] ≤ Available [${s.before.join(', ')}] ✓
+          <br>After release: Available becomes [${s.after.join(', ')}]
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+      steps.forEach((_, i) => {
+        setTimeout(() => {
+          const el = document.getElementById(`bstep-${i}`);
+          if (el) el.classList.add('visible');
+        }, i * 400 + 600);
+      });
+    }
+
+    // ============================================================
+    // RECOVERY
+    // ============================================================
+    let recoveryProcs = [];
+
+    function selectMethod(m) {
+      recoveryMethod = m;
+      document.querySelectorAll('#recovery-method-group .radio-btn').forEach(b => {
+        b.className = 'radio-btn';
+      });
+      event.target.classList.add('selected-recover');
+
+      const desc = {
+        terminate: '<strong>Process Termination:</strong> The OS kills one or more processes in the deadlock cycle to release their resources. The OS decides whom to kill based on priority, work done, and resources used.',
+        rollback: '<strong>Rollback (Checkpoint Recovery):</strong> System saves previous safe states (checkpoints). On deadlock detection, a process is rolled back to its earlier safe state, releasing the resources it held.',
+        preemption: '<strong>Resource Preemption:</strong> OS forcibly takes (preempts) resources from one process and gives them to another to break the deadlock. The selected process waits and restarts later.'
+      };
+      document.getElementById('method-desc').innerHTML = desc[m];
+    }
+
+    function buildRecoveryInputs() {
+      const p = parseInt(document.getElementById('r-procs').value);
+      const r = parseInt(document.getElementById('r-res').value);
+
+      let html = '<div class="input-row" style="margin-top:16px">';
+      for (let i = 0; i < p; i++) {
+        html += `<div class="input-group">
+      <label>P${i} Priority (1=high)</label>
+      <input type="number" min="1" max="10" value="${i + 1}" id="rp-priority-${i}">
+    </div>`;
+      }
+      html += '</div>';
+      document.getElementById('recovery-proc-config').innerHTML = html;
+      buildRecoveryNodes(p);
+    }
+
+    function buildRecoveryNodes(p) {
+      const resLetters = ['R1', 'R2', 'R3', 'R4'];
+      const r = parseInt(document.getElementById('r-res').value);
+      recoveryProcs = Array.from({ length: p }, (_, i) => ({
+        name: 'P' + i,
+        state: 'stuck',
+        holdsRes: Array.from({ length: r }, (_, j) => Math.random() > 0.5 ? resLetters[j] : null).filter(Boolean).slice(0, 2),
+        wantsRes: Array.from({ length: r }, (_, j) => Math.random() > 0.5 ? resLetters[j] : null).filter(Boolean).slice(0, 1),
+        priority: i + 1,
+        workDone: Math.floor(Math.random() * 80) + 10
+      }));
+
+      renderProcessNodes();
+    }
+
+    function renderProcessNodes() {
+      const el = document.getElementById('proc-nodes');
+      el.innerHTML = recoveryProcs.map((proc, i) => `
+    <div class="process-node ${proc.state}" id="pnode-${i}">
+      <div class="pnode-name" style="color:${proc.state === 'stuck' ? 'var(--accent-detect)' : proc.state === 'killed' ? 'var(--muted)' : proc.state === 'running' ? 'var(--accent-prevent)' : 'var(--accent-recover)'}">${proc.name}</div>
+      <div class="pnode-res">
+        Holds: ${proc.holdsRes.length ? proc.holdsRes.join(', ') : '-'}<br>
+        Wants: ${proc.wantsRes.length ? proc.wantsRes.join(', ') : '-'}<br>
+        Priority: ${proc.priority} | Done: ${proc.workDone}%
+      </div>
+      <div class="pnode-badge" style="background:${proc.state === 'stuck' ? 'rgba(255,71,87,0.2)' : proc.state === 'killed' ? 'rgba(107,114,128,0.2)' : proc.state === 'running' ? 'rgba(46,213,115,0.2)' : 'rgba(255,165,2,0.2)'};color:${proc.state === 'stuck' ? 'var(--accent-detect)' : proc.state === 'killed' ? 'var(--muted)' : proc.state === 'running' ? 'var(--accent-prevent)' : 'var(--accent-recover)'}">
+        ${proc.state.toUpperCase()}
+      </div>
+    </div>
+  `).join('');
+    }
+
+    function resetRecovery() {
+      buildRecoveryInputs();
+      document.getElementById('recovery-steps-list').innerHTML = '';
+      document.getElementById('recover-result').className = 'result-box';
+      clearLog('recover-log');
+      log('recover-log', '// Recovery simulation reset.', 'log-step');
+    }
+
+    function simulateRecovery() {
+      clearLog('recover-log');
+      document.getElementById('recovery-steps-list').innerHTML = '';
+      document.getElementById('recover-result').className = 'result-box';
+
+      // Reset states
+      recoveryProcs.forEach(p => p.state = 'stuck');
+      renderProcessNodes();
+
+      log('recover-log', `Deadlock detected. Starting recovery via: ${recoveryMethod.toUpperCase()}`, 'log-warn');
+
+      if (recoveryMethod === 'terminate') simulateTerminate();
+      else if (recoveryMethod === 'rollback') simulateRollback();
+      else simulatePreemption();
+    }
+
+    function addRecoveryStep(icon, title, desc, color, idx) {
+      const el = document.getElementById('recovery-steps-list');
+      const stepEl = document.createElement('div');
+      stepEl.className = 'step-item';
+      stepEl.id = `rstep-${idx}`;
+      stepEl.innerHTML = `
+    <div class="step-num" style="background:rgba(255,165,2,0.15);color:${color}">${icon}</div>
+    <div class="step-content">
+      <div class="step-title">${title}</div>
+      <div class="step-desc">${desc}</div>
+    </div>`;
+      el.appendChild(stepEl);
+      setTimeout(() => stepEl.classList.add('visible'), idx * 400 + 200);
+    }
+
+    function simulateTerminate() {
+      // Kill process with lowest priority (highest number) first
+      const sorted = [...recoveryProcs].sort((a, b) => b.priority - a.priority);
+      let killed = sorted[0];
+      let killedIdx = recoveryProcs.indexOf(killed);
+
+      addRecoveryStep('①', 'Deadlock Detected', `Processes in cycle: ${recoveryProcs.map(p => p.name).join(', ')}. All stuck waiting.`, 'var(--accent-detect)', 0);
+      addRecoveryStep('②', 'Select Victim Process', `OS selects P with lowest priority & least work done. Victim: <strong>${killed.name}</strong> (Priority: ${killed.priority}, Done: ${killed.workDone}%)`, 'var(--accent-recover)', 1);
+
+      setTimeout(() => {
+        recoveryProcs[killedIdx].state = 'killed';
+        renderProcessNodes();
+        log('recover-log', `Killed ${killed.name} — releasing resources: ${killed.holdsRes.join(', ') || 'none'}`, 'log-warn');
+      }, 600);
+
+      addRecoveryStep('③', 'Kill Process & Release Resources', `${killed.name} terminated. Resources released: ${killed.holdsRes.join(', ') || 'none'}`, 'var(--accent-detect)', 2);
+
+      setTimeout(() => {
+        recoveryProcs.forEach((p, i) => {
+          if (i !== killedIdx) p.state = 'running';
+        });
+        renderProcessNodes();
+        log('recover-log', 'Remaining processes can now proceed → Deadlock resolved ✓', 'log-safe');
+      }, 1600);
+
+      addRecoveryStep('④', 'Deadlock Resolved', `Remaining processes can now continue execution. System recovers successfully.`, 'var(--accent-prevent)', 3);
+
+      setTimeout(() => {
+        const resultEl = document.getElementById('recover-result');
+        resultEl.className = 'result-box result-safe show';
+        resultEl.innerHTML = `<div class="result-title" style="color:var(--accent-prevent)">✓ RECOVERY COMPLETE — Process Termination</div>
+    <div>Process <strong>${killed.name}</strong> was terminated. Its resources were released and the deadlock cycle was broken.</div>
+    <div style="margin-top:8px;color:var(--muted)"><em>Disadvantage: Work done by ${killed.name} is lost and must be restarted.</em></div>`;
+      }, 2200);
+    }
+
+    function simulateRollback() {
+      addRecoveryStep('①', 'Deadlock Detected', `Checkpoint system active. All processes have saved states.`, 'var(--accent-detect)', 0);
+
+      // Find process with most work done (best checkpoint candidate)
+      const target = recoveryProcs.reduce((a, b) => b.workDone > a.workDone ? b : a);
+      const targetIdx = recoveryProcs.indexOf(target);
+
+      addRecoveryStep('②', 'Identify Rollback Candidate', `Select process with checkpoint that breaks deadlock: <strong>${target.name}</strong> (Done: ${target.workDone}%)`, 'var(--accent-recover)', 1);
+
+      setTimeout(() => {
+        recoveryProcs[targetIdx].state = 'rollback';
+        renderProcessNodes();
+        log('recover-log', `Rolling back ${target.name} to last checkpoint...`, 'log-warn');
+      }, 600);
+
+      addRecoveryStep('③', 'Rollback to Safe Checkpoint', `${target.name} state restored to earlier checkpoint. Resources held by ${target.name} are released: ${target.holdsRes.join(', ') || 'none'}`, 'var(--accent-recover)', 2);
+
+      setTimeout(() => {
+        recoveryProcs.forEach((p, i) => {
+          p.state = i === targetIdx ? 'rollback' : 'running';
+        });
+        renderProcessNodes();
+        log('recover-log', `${target.name} rolled back. Other processes proceed. Deadlock broken ✓`, 'log-safe');
+      }, 1600);
+
+      addRecoveryStep('④', 'System Continues', `Remaining processes execute. ${target.name} will re-request resources from its earlier checkpoint state.`, 'var(--accent-prevent)', 3);
+
+      setTimeout(() => {
+        const resultEl = document.getElementById('recover-result');
+        resultEl.className = 'result-box result-safe show';
+        resultEl.innerHTML = `<div class="result-title" style="color:var(--accent-prevent)">✓ RECOVERY COMPLETE — Rollback</div>
+    <div><strong>${target.name}</strong> was rolled back to its last safe checkpoint. Released resources broke the deadlock.</div>
+    <div style="margin-top:8px;color:var(--muted)"><em>Advantage: Process not killed; only partial work lost. Requires checkpoint mechanism in memory.</em></div>`;
+      }, 2200);
+    }
+
+    function simulatePreemption() {
+      addRecoveryStep('①', 'Deadlock Detected', `OS will preempt (forcibly take) resources from a selected process.`, 'var(--accent-detect)', 0);
+
+      const victim = recoveryProcs.find(p => p.holdsRes.length > 0) || recoveryProcs[0];
+      const victimIdx = recoveryProcs.indexOf(victim);
+      const beneficiary = recoveryProcs.find((_, i) => i !== victimIdx) || recoveryProcs[0];
+      const preemptedRes = victim.holdsRes[0] || 'R1';
+
+      addRecoveryStep('②', 'Select Preemption Target', `OS selects <strong>${victim.name}</strong> (low priority/less work). Will preempt resource: <strong>${preemptedRes}</strong>`, 'var(--accent-recover)', 1);
+
+      setTimeout(() => {
+        victim.holdsRes = victim.holdsRes.filter(r => r !== preemptedRes);
+        recoveryProcs[victimIdx].state = 'rollback';
+        renderProcessNodes();
+        log('recover-log', `Preempted ${preemptedRes} from ${victim.name}`, 'log-warn');
+      }, 600);
+
+      addRecoveryStep('③', 'Preempt Resource', `${preemptedRes} forcibly taken from ${victim.name}. ${victim.name} must wait and will restart later.`, 'var(--accent-recover)', 2);
+
+      setTimeout(() => {
+        recoveryProcs.forEach((p, i) => {
+          if (i !== victimIdx) p.state = 'running';
+        });
+        renderProcessNodes();
+        log('recover-log', `${preemptedRes} given to ${beneficiary.name}. Deadlock broken ✓`, 'log-safe');
+      }, 1600);
+
+      addRecoveryStep('④', 'Deadlock Resolved', `${beneficiary.name} gets ${preemptedRes}, completes, then releases resources. ${victim.name} resumes after.`, 'var(--accent-prevent)', 3);
+
+      setTimeout(() => {
+        const resultEl = document.getElementById('recover-result');
+        resultEl.className = 'result-box result-safe show';
+        resultEl.innerHTML = `<div class="result-title" style="color:var(--accent-prevent)">✓ RECOVERY COMPLETE — Resource Preemption</div>
+    <div>Resource <strong>${preemptedRes}</strong> was preempted from <strong>${victim.name}</strong> and reallocated. Deadlock cycle broken.</div>
+    <div style="margin-top:8px;color:var(--muted)"><em>Not suitable for all resources (e.g., printer mid-job). Requires saving/restoring process state.</em></div>`;
+      }, 2200);
+    }
+
+    // ============================================================
+    // INIT
+    // ============================================================
+    window.addEventListener('load', () => {
+      buildDetectInputs();
+      buildBankerInputs();
+      buildRecoveryInputs();
+    });
+
+    window.addEventListener('resize', () => {
+      if (currentTab === 'detect') {
+        // redraw if needed
+      }
+    });
+  </script>
+</body>
+
+</html>
