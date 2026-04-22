@@ -1237,8 +1237,8 @@
         document.getElementById('d-res').value = 2;
         document.getElementById('d-instances').value = '1,2';
         buildDetectInputs();
-        setMatrix('alloc', [[1, 0], [0, 1], [0, 1]]);
-        setMatrix('req', [[0, 1], [1, 0], [0, 0]]);
+        setMatrix('alloc', [[1, 0], [0, 1], [0, 0]]);
+        setMatrix('req', [[0, 0], [0, 0], [0, 1]]);
         log('detect-log', 'Loaded: No Deadlock Example — P2 can finish and release R2', 'log-safe');
       }
     }
